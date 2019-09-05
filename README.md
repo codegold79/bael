@@ -1,3 +1,4 @@
 # bael
 ## Practicing using Go libraries
-* scraping one web page's html content and saving to file using *net/http*, *ioutil*, and *os*
+* scrape web page's html content with *net/http* and *golang.org/x/net/html*,
+* save to file using *os*
