@@ -5,7 +5,7 @@ import (
 	"golang.org/x/net/html"
 	"net/http"
 	"os"
-	s "strings"
+	"strings"
 )
 
 func main() {
@@ -56,7 +56,7 @@ func parseHtml(content *http.Response) (map[int]string, error) {
 			}
 
 			// (1) alert_list ul has been found. Start saving data.
-			if isAlertUl == false && len(t.Attr) > 0 && s.Contains(t.Attr[0].Val, "alert_list") {
+			if isAlertUl == false && len(t.Attr) > 0 && strings.Contains(t.Attr[0].Val, "alert_list") {
 				isAlertUl = true
 			}
 
@@ -83,7 +83,7 @@ func parseHtml(content *http.Response) (map[int]string, error) {
 		case html.TextToken:
 			if isAlertUl == true {
 				t := htmlTokens.Token()
-				text := s.TrimSpace(t.Data)
+				text := strings.TrimSpace(t.Data)
 
 				if alerts[i] != "" {
 					alerts[i] = alerts[i] + " " + text
