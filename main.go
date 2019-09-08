@@ -8,6 +8,7 @@ import (
 	"google.golang.org/api/iterator"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -176,28 +177,11 @@ func parseHtml(page *http.Response, routeID string) (alerts, error) {
 	}
 
 	doc.Find(".alert").Each(func(i int, s *goquery.Selection) {
-		txt := s.Find("div").Text()
-		txt = strings.TrimSpace(txt)
+		txt := strings.TrimSpace(s.Find("div").Text())
 
-		// Remove excessive tabs
-		sli := strings.Split(txt, "\t")
-		var sli2 []string
-		for _, v := range sli {
-			if v != "" {
-				sli2 = append(sli2, v)
-			}
-		}
-		txt = strings.Join(sli2, " ")
-
-		// Remove excessive line breaks
-		sli = strings.Split(txt, "\n")
-		sli2 = []string{}
-		for _, v := range sli {
-			if v != " " {
-				sli2 = append(sli2, v)
-			}
-		}
-		txt = strings.Join(sli2, "\n")
+		// Remove excessive spaces
+		space := regexp.MustCompile(`(\s)(\s)*`)
+		txt = space.ReplaceAllString(txt, "$1")
 
 		a = alert{txt, []string{routeID}}
 		someAlerts = append(someAlerts, a)
