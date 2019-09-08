@@ -41,6 +41,7 @@ func scrapeSite(baseUrl string) (alerts, error) {
 	var routes []route
 
 	routes, err := getRoutes()
+	fmt.Println("Routes retrieved from db")
 
 	if err != nil {
 		return nil, err
@@ -51,6 +52,7 @@ func scrapeSite(baseUrl string) (alerts, error) {
 	for _, v := range routes {
 		url = baseUrl + v.routePath
 		resp, err := http.Get(url)
+		fmt.Println("Retrieved route from " + url)
 
 		if err != nil {
 			return allAlerts, err
@@ -174,7 +176,30 @@ func parseHtml(page *http.Response, routeID string) (alerts, error) {
 	}
 
 	doc.Find(".alert").Each(func(i int, s *goquery.Selection) {
-		a = alert{strings.TrimSpace(s.Find("div").Text()), []string{routeID}}
+		txt := s.Find("div").Text()
+		txt = strings.TrimSpace(txt)
+
+		// Remove excessive tabs
+		sli := strings.Split(txt, "\t")
+		var sli2 []string
+		for _, v := range sli {
+			if v != "" {
+				sli2 = append(sli2, v)
+			}
+		}
+		txt = strings.Join(sli2, " ")
+
+		// Remove excessive line breaks
+		sli = strings.Split(txt, "\n")
+		sli2 = []string{}
+		for _, v := range sli {
+			if v != " " {
+				sli2 = append(sli2, v)
+			}
+		}
+		txt = strings.Join(sli2, "\n")
+
+		a = alert{txt, []string{routeID}}
 		someAlerts = append(someAlerts, a)
 	})
 
