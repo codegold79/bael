@@ -49,7 +49,7 @@ func scrapeSite(baseUrl string) (alerts, error) {
 	url := baseUrl
 
 	for _, v := range routes {
-		url += v.routePath
+		url = baseUrl + v.routePath
 		resp, err := http.Get(url)
 
 		if err != nil {
