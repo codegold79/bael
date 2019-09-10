@@ -35,6 +35,7 @@ func main() {
 	}
 
 	saveAlertsToFile(allAlerts)
+	saveAlertsToDb(allAlerts)
 }
 
 func scrapeSite(baseUrl string) (alerts, error) {
@@ -108,58 +109,6 @@ func getRoutes() ([]route, error) {
 	return routes, nil
 }
 
-func saveAlertsToDb(alerts map[int]string) error {
-	ctx := context.Background()
-	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
-
-	if err != nil {
-		fmt.Printf("firestore.NewClient: %v", err)
-	}
-
-	defer client.Close()
-
-	// Grab all the documents that don't have outdated_at.
-	iter := client.Collection("alerts").Where("outdated_at", "==", nil).Documents(ctx)
-
-	for {
-		// Go through the docs and see if the body is in the alerts map.
-		doc, err := iter.Next()
-
-		if err == iterator.Done {
-			break
-		}
-
-		for k, v := range alerts {
-			if v == doc.Data()["body"] {
-				// If there is a matching entry in the alerts map, remove it.
-				delete(alerts, k)
-			} else {
-				// If there is no match in alerts map, set outdated_at date.
-				_, err := client.Collection("alerts").Doc(doc.Ref.ID).Set(ctx, map[string]interface{}{
-					"outdated_at": firestore.ServerTimestamp,
-				}, firestore.MergeAll)
-
-				if err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	// Go through the remaining items in the alerts map. These should all be new alerts
-	// save each alert in map as a new document.
-	// type Alert struct {
-	// 	Body        string    `firestore:"body,omitempty"`
-	// 	Routes      []string  `firestore:"routes,omitempty"`
-	// 	Outdated_at time.Time `firestore:"outdated_at,omitempty"`
-	// }
-	// var routes []string
-	// for k, v := range alerts {
-	// 	routes = getRoutes(alerts["body"])
-	// }
-	return nil
-}
-
 func parseHtml(page *http.Response, routeID string) (alerts, error) {
 	var a alert
 	var someAlerts alerts
@@ -202,6 +151,76 @@ func saveAlertsToFile(alerts alerts) error {
 
 	for _, v := range alerts {
 		f.WriteString(strings.Join(v.routeIDs, ", ") + " " + v.text + "\n")
+	}
+
+	return nil
+}
+
+func saveAlertsToDb(alerts alerts) error {
+	ctx := context.Background()
+	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
+
+	if err != nil {
+		fmt.Printf("firestore.NewClient: %v", err)
+	}
+
+	defer client.Close()
+	fmt.Println("\nwriting to database")
+
+	// Grab all the documents that don't have outdated_at.
+	iter := client.Collection("alerts").Where("outdated_at", "==", nil).Documents(ctx)
+
+	for {
+		// Go through the docs and see if the body is in the alerts map.
+		doc, err := iter.Next()
+
+		if err == iterator.Done {
+			break
+		}
+
+		var docIsOutdated bool
+
+		for i, v := range alerts {
+			docIsOutdated = true
+			if v.text == doc.Data()["alert_text"] {
+				// If there is a matching entry in the slice, mark it for deletion.
+				// It's not needed because it's already in the database, and the
+				// database entry is still up-to-date.
+				alerts[i].text = "delete"
+				docIsOutdated = false
+			}
+		}
+
+		if docIsOutdated {
+			_, err := client.Collection("alerts").Doc(doc.Ref.ID).Set(ctx, map[string]interface{}{
+				"outdated_at": firestore.ServerTimestamp,
+			}, firestore.MergeAll)
+
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// Create another slice with just the new alerts.
+	var newAlerts []alert
+	for _, v := range alerts {
+		if v.text != "delete" {
+			newAlerts = append(newAlerts, v)
+		}
+	}
+
+	// Go through save all the alerts in the slice to the database.
+	for _, v := range newAlerts {
+		_, _, err = client.Collection("alerts").Add(ctx, map[string]interface{}{
+			"alert_text":  v.text,
+			"outdated_at": nil,
+			"route_ids":   v.routeIDs,
+		})
+
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
