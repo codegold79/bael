@@ -34,7 +34,7 @@ func main() {
 		fmt.Println(err)
 	}
 
-	fmt.Println(allAlerts)
+	saveAlertsToFile(allAlerts)
 }
 
 func scrapeSite(baseUrl string) (alerts, error) {
@@ -190,7 +190,7 @@ func parseHtml(page *http.Response, routeID string) (alerts, error) {
 	return someAlerts, err
 }
 
-func saveAlertsToFile(content map[int]string) error {
+func saveAlertsToFile(alerts alerts) error {
 	f, err := os.Create("outputs/ltd-service-alerts.txt")
 
 	if err != nil {
@@ -200,8 +200,8 @@ func saveAlertsToFile(content map[int]string) error {
 	defer f.Close()
 	fmt.Println("\nwriting to file")
 
-	for _, v := range content {
-		f.WriteString(v + "\n")
+	for _, v := range alerts {
+		f.WriteString(strings.Join(v.routeIDs, ", ") + " " + v.text + "\n")
 	}
 
 	return nil
