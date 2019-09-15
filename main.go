@@ -43,7 +43,7 @@ func scrapeSite(baseUrl string) (alerts, error) {
 	var routes []route
 
 	routes, err := getRoutes()
-	fmt.Println("Routes retrieved from db")
+	fmt.Println("Route list retrieved from db")
 
 	if err != nil {
 		return nil, err
@@ -54,7 +54,7 @@ func scrapeSite(baseUrl string) (alerts, error) {
 	for _, v := range routes {
 		url = baseUrl + v.routePath
 		resp, err := http.Get(url)
-		fmt.Println("Retrieved route from " + url)
+		fmt.Println("Retrieved service alert(s) from " + url)
 
 		if err != nil {
 			return allAlerts, err
@@ -178,27 +178,22 @@ func saveAlertsToDb(alerts alerts) error {
 			break
 		}
 
-		var docIsOutdated bool
+		var isDocOutdated = true
 
 		for i, v := range alerts {
-			docIsOutdated = true
 			if v.text == doc.Data()["alert_text"] {
 				// If there is a matching entry in the slice, mark it for deletion.
 				// It's not needed because it's already in the database, and the
 				// database entry is still up-to-date.
 				alerts[i].text = "delete"
-				docIsOutdated = false
+				isDocOutdated = false
 			}
 		}
 
-		if docIsOutdated {
-			_, err := client.Collection("alerts").Doc(doc.Ref.ID).Set(ctx, map[string]interface{}{
-				"outdated_at": firestore.ServerTimestamp,
-			}, firestore.MergeAll)
-
-			if err != nil {
-				return err
-			}
+		// Now that we've gone through all the alert slice items, we can tell if
+		// the database doc being looked at is outdated. If it is, set it as such.
+		if isDocOutdated {
+			err = setDocAsOutdated(doc.Ref.ID)
 		}
 	}
 
@@ -221,6 +216,27 @@ func saveAlertsToDb(alerts alerts) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func setDocAsOutdated(docID string) error {
+	ctx := context.Background()
+	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
+
+	if err != nil {
+		fmt.Printf("firestore.NewClient: %v", err)
+	}
+
+	defer client.Close()
+
+	_, err = client.Collection("alerts").Doc(docID).Set(ctx, map[string]interface{}{
+		"outdated_at": firestore.ServerTimestamp,
+	}, firestore.MergeAll)
+
+	if err != nil {
+		return err
 	}
 
 	return nil
