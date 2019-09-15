@@ -72,10 +72,30 @@ func scrapeSite(baseUrl string) (alerts, error) {
 }
 
 func (someAlerts alerts) addToAlerts(allAlerts *alerts) error {
+	var i int
+
 	for _, v := range someAlerts {
-		*allAlerts = append(*allAlerts, v)
+		i = findIndexOfDupeAlert(v.text, allAlerts)
+		if i > -1 {
+			// This alert is a duplicate, so add route to existing alert.
+			(*allAlerts)[i].routeIDs = append((*allAlerts)[i].routeIDs, v.routeIDs[0])
+		} else {
+			*allAlerts = append(*allAlerts, v)
+		}
 	}
 	return nil
+}
+
+func findIndexOfDupeAlert(text string, allAlerts *alerts) int {
+	i := -1
+
+	for j, v := range *allAlerts {
+		if text == v.text {
+			i = j
+		}
+	}
+
+	return i
 }
 
 func getRoutes() ([]route, error) {
