@@ -1,4 +1,4 @@
-package main
+package gatherData
 
 import (
 	"cloud.google.com/go/firestore"
@@ -24,25 +24,11 @@ type route struct {
 	routePath string
 }
 
-func main() {
-	var allAlerts alerts
-
-	baseUrl := "https://www.ltd.org/system-map/"
-	allAlerts, err := scrapeSite(baseUrl)
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	saveAlertsToFile(allAlerts)
-	saveAlertsToDb(allAlerts)
-}
-
-func scrapeSite(baseUrl string) (alerts, error) {
+func ScrapeSite(baseUrl string) (alerts, error) {
 	var allAlerts alerts
 	var routes []route
 
-	routes, err := getRoutes()
+	routes, err := GetRoutes()
 	fmt.Println("Route list retrieved from db")
 
 	if err != nil {
@@ -98,7 +84,7 @@ func findIndexOfDupeAlert(text string, allAlerts *alerts) int {
 	return i
 }
 
-func getRoutes() ([]route, error) {
+func GetRoutes() ([]route, error) {
 	var routes []route
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
@@ -159,7 +145,7 @@ func parseHtml(page *http.Response, routeID string) (alerts, error) {
 	return someAlerts, err
 }
 
-func saveAlertsToFile(alerts alerts) error {
+func SaveAlertsToFile(alerts alerts) error {
 	f, err := os.Create("outputs/ltd-service-alerts.txt")
 
 	if err != nil {
@@ -176,7 +162,7 @@ func saveAlertsToFile(alerts alerts) error {
 	return nil
 }
 
-func saveAlertsToDb(alerts alerts) error {
+func SaveAlertsToDb(alerts alerts) error {
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
 
@@ -213,7 +199,7 @@ func saveAlertsToDb(alerts alerts) error {
 		// Now that we've gone through all the alert slice items, we can tell if
 		// the database doc being looked at is outdated. If it is, set it as such.
 		if isDocOutdated {
-			err = setDocAsOutdated(doc.Ref.ID)
+			err = SetDocAsOutdated(doc.Ref.ID)
 		}
 	}
 
@@ -241,7 +227,7 @@ func saveAlertsToDb(alerts alerts) error {
 	return nil
 }
 
-func setDocAsOutdated(docID string) error {
+func SetDocAsOutdated(docID string) error {
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
 
