@@ -47,7 +47,7 @@ func ScrapeSite(baseUrl string) (alerts, error) {
 		}
 
 		someAlerts, err := parseHtml(resp, v.routeID)
-		err = someAlerts.addToAlerts(&allAlerts)
+		allAlerts, err = someAlerts.addToAlerts(allAlerts)
 
 		if err != nil {
 			return allAlerts, err
@@ -57,25 +57,24 @@ func ScrapeSite(baseUrl string) (alerts, error) {
 	return allAlerts, nil
 }
 
-func (someAlerts alerts) addToAlerts(allAlerts *alerts) error {
+func (someAlerts alerts) addToAlerts(allAlerts alerts) (alerts, error) {
 	var i int
-
 	for _, v := range someAlerts {
 		i = findIndexOfDupeAlert(v.text, allAlerts)
 		if i > -1 {
 			// This alert is a duplicate, so add route to existing alert.
-			(*allAlerts)[i].routeIDs = append((*allAlerts)[i].routeIDs, v.routeIDs[0])
+			allAlerts[i].routeIDs = append(allAlerts[i].routeIDs, v.routeIDs[0])
 		} else {
-			*allAlerts = append(*allAlerts, v)
+			allAlerts = append(allAlerts, v)
 		}
 	}
-	return nil
+	return allAlerts, nil
 }
 
-func findIndexOfDupeAlert(text string, allAlerts *alerts) int {
+func findIndexOfDupeAlert(text string, allAlerts alerts) int {
 	i := -1
 
-	for j, v := range *allAlerts {
+	for j, v := range allAlerts {
 		if text == v.text {
 			i = j
 		}
