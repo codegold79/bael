@@ -14,7 +14,9 @@ func main() {
 		fmt.Println(err)
 	}
 
+	fmt.Println("\nwriting to file")
 	gatherData.SaveAlertsToFile(allAlerts)
+	fmt.Println("\nwriting to database")
 	gatherData.SaveAlertsToDb(allAlerts)
 
 	users, err := userData.GetUserKeys()

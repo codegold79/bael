@@ -152,7 +152,6 @@ func SaveAlertsToFile(alerts alerts) error {
 	}
 
 	defer f.Close()
-	fmt.Println("\nwriting to file")
 
 	for _, v := range alerts {
 		f.WriteString(strings.Join(v.routeIDs, ", ") + " " + v.text + "\n")
@@ -170,7 +169,6 @@ func SaveAlertsToDb(alerts alerts) error {
 	}
 
 	defer client.Close()
-	fmt.Println("\nwriting to database")
 
 	// Grab all the documents that don't have outdated_at.
 	iter := client.Collection("alerts").Where("outdated_at", "==", nil).Documents(ctx)
