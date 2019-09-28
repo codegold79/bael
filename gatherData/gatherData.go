@@ -28,7 +28,7 @@ func ScrapeSite(baseUrl string) (alerts, error) {
 	var allAlerts alerts
 	var routes []route
 
-	routes, err := GetRoutes()
+	routes, err := GetAllRoutes()
 	fmt.Println("Route list retrieved from db")
 
 	if err != nil {
@@ -83,7 +83,7 @@ func findIndexOfDupeAlert(text string, allAlerts alerts) int {
 	return i
 }
 
-func GetRoutes() ([]route, error) {
+func GetAllRoutes() ([]route, error) {
 	var routes []route
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
