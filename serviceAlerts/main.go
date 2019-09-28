@@ -19,14 +19,21 @@ func main() {
 	fmt.Println("\nwriting to database")
 	gatherData.SaveAlertsToDb(allAlerts)
 
-	users, err := userData.GetUserKeys()
+	userKeys, err := userData.GetUserKeys()
 	fmt.Println("User keys retrieved")
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	for _, u := range users {
-		userData.RemoveOutdatedAlerts(u)
+	for _, key := range userKeys {
+		userData.RemoveOutdatedAlerts(key)
 		fmt.Println("Outdated users' alerts removed")
+		
+		// Gather new alerts
+		fmt.Println(userData.GatherNewUserAlerts(key))
+		fmt.Println("Retrieved userData")
+		
+		// Send email with new alerts
+		// Save keys in user data as they are no longer new
 	}
 }

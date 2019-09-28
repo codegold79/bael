@@ -1,16 +1,9 @@
-// Send update emails
-// loop through the all the user's routes
-// 	in service_alerts, find all alerts that contain the route_id that have outdated_at = null
-// loop through the found alerts
-// 	if the route isn't already in the user's stored_service_alerts array, then store it in the email array
-//  if the route is already in the user's stored service_alerts array, do nothing
-// if the email array is not empty, send emails to the user's email address
-
 package userData
 
 import (
 	"cloud.google.com/go/firestore"
 	"context"
+	"fmt"
 	"google.golang.org/api/iterator"
 )
 
@@ -93,4 +86,91 @@ func RemoveOutdatedAlerts(userKey string) error {
 	}, firestore.MergeAll)
 
 	return nil
+}
+
+func GatherNewUserAlerts(userKey string) ([]string, error) {
+	ctx := context.Background()
+	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
+	var routeAlerts []string
+	var newAlerts []string
+
+	if err != nil {
+		return []string{}, err
+	}
+
+	defer client.Close()
+
+	userRoutesAndAlerts, err := GetUserRoutesAndAlerts(userKey)
+	fmt.Printf("Retrieved alerts for userKey: %v\n", userKey)
+
+	if err != nil {
+		return []string{}, err
+	}
+
+	for _, uRoute := range userRoutesAndAlerts.Route_ids {
+		iter := client.Collection("alerts").Where("outdated_at", "==", nil).Where("route_ids", "array-contains", uRoute).Documents(ctx)
+		for {
+			doc, err := iter.Next()
+
+			if err == iterator.Done {
+				break
+			}
+
+			routeAlerts = append(routeAlerts, doc.Ref.ID)
+		}
+	}
+	var match bool
+
+	for _, rAlert := range routeAlerts {
+		match = false
+		for _, uAlert := range userRoutesAndAlerts.Stored_alert_keys {
+			if rAlert == uAlert {
+				match = true
+			}
+		}
+		if !match {
+			newAlerts = append(newAlerts, rAlert)
+		}
+	}
+
+	return newAlerts, nil
+}
+
+// Send update emails
+// if the email array is not empty, send emails to the user's email address
+func SendAlertsToUserEmail(userKey string, alerts []string) error {
+	return nil
+}
+
+type UserInfo struct {
+	Route_ids         []string `firestore:"route_ids"`
+	Stored_alert_keys []string `firestore:"stored_alert_keys"`
+}
+
+// Return the routes that a user is subscribed to.
+func GetUserRoutesAndAlerts(userKey string) (UserInfo, error) {
+	var userInfo UserInfo
+
+	ctx := context.Background()
+	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
+
+	if err != nil {
+		return userInfo, err
+	}
+
+	defer client.Close()
+
+	doc, err := client.Collection("users").Doc(userKey).Get(ctx)
+
+	if err != nil {
+		return userInfo, err
+	}
+
+	err = doc.DataTo(&userInfo)
+
+	if err != nil {
+		return userInfo, err
+	}
+
+	return userInfo, nil
 }
