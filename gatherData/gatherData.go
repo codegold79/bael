@@ -160,7 +160,7 @@ func SaveAlertsToFile(alerts alerts) error {
 	return nil
 }
 
-func SaveAlertsToDb(alerts alerts) error {
+func SaveAlertsToDb(ltdAlerts alerts) error {
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
 
@@ -170,39 +170,32 @@ func SaveAlertsToDb(alerts alerts) error {
 
 	defer client.Close()
 
-	// Grab all the documents that don't have outdated_at.
-	iter := client.Collection("alerts").Where("outdated_at", "==", nil).Documents(ctx)
+	currentDbAlerts := GetCurrentServiceAlertTextsFromDb()
+	dbDocOutdated := true
 
-	for {
-		// Go through the docs and see if the body is in the alerts map.
-		doc, err := iter.Next()
+	for dbKey, cda := range currentDbAlerts {
+		dbDocOutdated = true
 
-		if err == iterator.Done {
-			break
-		}
-
-		var isDocOutdated = true
-
-		for i, v := range alerts {
-			if v.text == doc.Data()["alert_text"] {
-				// If there is a matching entry in the slice, mark it for deletion.
+		for i, la := range ltdAlerts {
+			if la.text == cda {
+				// If there is a matching entry in the ltdAlerts, mark it for deletion.
 				// It's not needed because it's already in the database, and the
 				// database entry is still up-to-date.
-				alerts[i].text = "delete"
-				isDocOutdated = false
+				ltdAlerts[i].text = "delete"
+				dbDocOutdated = false
 			}
 		}
 
-		// Now that we've gone through all the alert slice items, we can tell if
-		// the database doc being looked at is outdated. If it is, set it as such.
-		if isDocOutdated {
-			err = SetDocAsOutdated(doc.Ref.ID)
+		// Now that we've gone through all the ltdAlerts, we know those without
+		// matching ltdAlert entries are outdated. So, set it as such in the db.
+		if dbDocOutdated {
+			err = SetDocAsOutdated(dbKey)
 		}
 	}
 
 	// Create another slice with just the new alerts.
 	var newAlerts []alert
-	for _, v := range alerts {
+	for _, v := range ltdAlerts {
 		if v.text != "delete" {
 			newAlerts = append(newAlerts, v)
 		}
@@ -243,4 +236,33 @@ func SetDocAsOutdated(docID string) error {
 	}
 
 	return nil
+}
+
+// Store all the non-outdated service alert texts to reduce db queries.
+func GetCurrentServiceAlertTextsFromDb() map[string]string {
+	ctx := context.Background()
+	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
+
+	alerts := make(map[string]string)
+
+	if err != nil {
+		fmt.Printf("firestore.NewClient: %v", err)
+	}
+
+	defer client.Close()
+
+	iter := client.Collection("alerts").Where("outdated_at", "==", nil).Documents(ctx)
+
+	for {
+		// Go through the docs and see if the body is in the alerts map.
+		doc, err := iter.Next()
+
+		if err == iterator.Done {
+			break
+		}
+
+		alerts[doc.Ref.ID] = doc.Data()["alert_text"].(string)
+	}
+
+	return alerts
 }
