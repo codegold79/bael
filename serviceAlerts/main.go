@@ -8,17 +8,17 @@ import (
 )
 
 func main() {
-	// baseUrl := "https://www.ltd.org/system-map/"
-	// allAlerts, err := gatherData.ScrapeSite(baseUrl)
+	baseUrl := "https://www.ltd.org/system-map/"
+	allAlerts, err := gatherData.ScrapeSite(baseUrl)
 
-	// if err != nil {
-	// 	fmt.Println(err)
-	// }
+	if err != nil {
+		fmt.Println(err)
+	}
 
-	// fmt.Println("\nwriting to file")
-	// gatherData.SaveAlertsToFile(allAlerts)
-	// fmt.Println("\nwriting to database")
-	// gatherData.SaveAlertsToDb(allAlerts)
+	fmt.Println("\nwriting to file")
+	gatherData.SaveAlertsToFile(allAlerts)
+	fmt.Println("\nwriting to database")
+	gatherData.UpdateDbAlerts(allAlerts)
 
 	userKeys, err := userData.GetUserKeys()
 	fmt.Println("User keys retrieved")
@@ -29,8 +29,8 @@ func main() {
 	currDbAlerts := gatherData.GetCurrentServiceAlertTextsFromDb()
 
 	for _, uk := range userKeys {
-		userData.RemoveOutdatedAlerts(uk)
-		fmt.Println("Outdated users' alerts removed")
+		userData.UpdateUserAlerts(uk)
+		fmt.Println("Outdated and unsubscribed users' alerts removed")
 
 		userInfo, err := userData.GatherUserInfo(uk)
 
@@ -47,11 +47,21 @@ func main() {
 
 		fmt.Println("Retrieved userData")
 
-		err = emailAlerts.SendEmail(userInfo.Email, alertKeys, currDbAlerts)
+		if len(alertKeys) > 0 {
+			err = emailAlerts.SendEmail(userInfo.Email, alertKeys, currDbAlerts)
+		} else {
+			fmt.Println("No alerts to send")
+		}
 
 		if err != nil {
 			fmt.Println(err)
 		}
+
 		// Save keys in user data as they are no longer new
+		err = userData.SaveKeysInUserData(uk, alertKeys)
+
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 }

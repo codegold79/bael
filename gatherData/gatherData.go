@@ -160,7 +160,7 @@ func SaveAlertsToFile(alerts alerts) error {
 	return nil
 }
 
-func SaveAlertsToDb(ltdAlerts alerts) error {
+func UpdateDbAlerts(ltdAlerts alerts) error {
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
 

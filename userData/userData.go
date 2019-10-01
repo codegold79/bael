@@ -34,7 +34,8 @@ func GetUserKeys() ([]string, error) {
 	return users, err
 }
 
-func RemoveOutdatedAlerts(userKey string) error {
+// Remove outdated and unsubscribed alerts.
+func UpdateUserAlerts(userKey string) error {
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
 
@@ -155,13 +156,6 @@ func GatherUserNewAlerts(userKey string, userRoutes []string, userAlerts []strin
 	return newAlerts, nil
 }
 
-// Send update emails
-// if the email array is not empty, send emails to the user's email address
-func SendAlertsToUserEmail(userKey string, alerts []string) error {
-	return nil
-}
-
-// Return the routes that a user is subscribed to.
 func GetUserInfo(userKey string) (UserInfo, error) {
 	var userInfo UserInfo
 
@@ -187,4 +181,25 @@ func GetUserInfo(userKey string) (UserInfo, error) {
 	}
 
 	return userInfo, nil
+}
+
+func SaveKeysInUserData(userKey string, alertKeys []string) error {
+	ctx := context.Background()
+	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
+
+	if err != nil {
+		return err
+	}
+
+	defer client.Close()
+
+	_, err = client.Collection("users").Doc(userKey).Set(ctx, map[string]interface{}{
+		"stored_alert_keys": alertKeys,
+	}, firestore.MergeAll)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
