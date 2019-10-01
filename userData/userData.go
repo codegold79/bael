@@ -34,7 +34,8 @@ func GetUserKeys() ([]string, error) {
 	return users, err
 }
 
-func RemoveOutdatedAlerts(userKey string) error {
+// Remove outdated and unsubscribed alerts.
+func UpdateUserAlerts(userKey string) error {
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
 
@@ -88,27 +89,46 @@ func RemoveOutdatedAlerts(userKey string) error {
 	return nil
 }
 
-func GatherNewUserAlerts(userKey string) ([]string, error) {
+type UserInfo struct {
+	Route_ids         []string `firestore:"route_ids"`
+	Stored_alert_keys []string `firestore:"stored_alert_keys"`
+	Email             string   `firestore:"email"`
+	Name              string   `firestore:"name"`
+}
+
+func GatherUserInfo(userKey string) (UserInfo, error) {
+	var userInfo UserInfo
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
-	var routeAlerts []string
-	var newAlerts []string
 
 	if err != nil {
-		return []string{}, err
+		return userInfo, err
 	}
 
 	defer client.Close()
 
-	userRoutesAndAlerts, err := GetUserRoutesAndAlerts(userKey)
+	userInfo, err = GetUserInfo(userKey)
 	fmt.Printf("Retrieved alerts for userKey: %v\n", userKey)
 
 	if err != nil {
-		return []string{}, err
+		return userInfo, err
 	}
 
-	for _, uRoute := range userRoutesAndAlerts.Route_ids {
-		iter := client.Collection("alerts").Where("outdated_at", "==", nil).Where("route_ids", "array-contains", uRoute).Documents(ctx)
+	return userInfo, nil
+}
+
+func GatherUserNewAlerts(userKey string, userRoutes []string, userAlerts []string) ([]string, error) {
+	var routeAlerts []string
+	var newAlerts []string
+
+	ctx := context.Background()
+	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
+	if err != nil {
+		return newAlerts, err
+	}
+
+	for _, ur := range userRoutes {
+		iter := client.Collection("alerts").Where("outdated_at", "==", nil).Where("route_ids", "array-contains", ur).Documents(ctx)
 		for {
 			doc, err := iter.Next()
 
@@ -119,36 +139,24 @@ func GatherNewUserAlerts(userKey string) ([]string, error) {
 			routeAlerts = append(routeAlerts, doc.Ref.ID)
 		}
 	}
-	var match bool
 
-	for _, rAlert := range routeAlerts {
+	var match bool
+	for _, ra := range routeAlerts {
 		match = false
-		for _, uAlert := range userRoutesAndAlerts.Stored_alert_keys {
-			if rAlert == uAlert {
+		for _, ua := range userAlerts {
+			if ra == ua {
 				match = true
 			}
 		}
 		if !match {
-			newAlerts = append(newAlerts, rAlert)
+			newAlerts = append(newAlerts, ra)
 		}
 	}
 
 	return newAlerts, nil
 }
 
-// Send update emails
-// if the email array is not empty, send emails to the user's email address
-func SendAlertsToUserEmail(userKey string, alerts []string) error {
-	return nil
-}
-
-type UserInfo struct {
-	Route_ids         []string `firestore:"route_ids"`
-	Stored_alert_keys []string `firestore:"stored_alert_keys"`
-}
-
-// Return the routes that a user is subscribed to.
-func GetUserRoutesAndAlerts(userKey string) (UserInfo, error) {
+func GetUserInfo(userKey string) (UserInfo, error) {
 	var userInfo UserInfo
 
 	ctx := context.Background()
@@ -173,4 +181,25 @@ func GetUserRoutesAndAlerts(userKey string) (UserInfo, error) {
 	}
 
 	return userInfo, nil
+}
+
+func SaveKeysInUserData(userKey string, alertKeys []string) error {
+	ctx := context.Background()
+	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
+
+	if err != nil {
+		return err
+	}
+
+	defer client.Close()
+
+	_, err = client.Collection("users").Doc(userKey).Set(ctx, map[string]interface{}{
+		"stored_alert_keys": alertKeys,
+	}, firestore.MergeAll)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
