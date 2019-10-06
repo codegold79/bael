@@ -19,26 +19,13 @@ type alert struct {
 
 type alerts []alert
 
-type route struct {
-	routeID   string
-	routePath string
-}
-
-func ScrapeSite(baseUrl string) (alerts, error) {
+func ScrapeSite(baseUrl string, routes map[string]string) (alerts, error) {
 	var allAlerts alerts
-	var routes []route
-
-	routes, err := GetAllRoutes()
-	fmt.Println("Route list retrieved from db")
-
-	if err != nil {
-		return nil, err
-	}
 
 	url := baseUrl
 
-	for _, v := range routes {
-		url = baseUrl + v.routePath
+	for id, path := range routes {
+		url = baseUrl + path
 		resp, err := http.Get(url)
 		fmt.Println("Retrieved service alert(s) from " + url)
 
@@ -46,7 +33,7 @@ func ScrapeSite(baseUrl string) (alerts, error) {
 			return allAlerts, err
 		}
 
-		someAlerts, err := parseHtml(resp, v.routeID)
+		someAlerts, err := parseHtml(resp, id)
 		allAlerts, err = someAlerts.addToAlerts(allAlerts)
 
 		if err != nil {
@@ -83,8 +70,9 @@ func findIndexOfDupeAlert(text string, allAlerts alerts) int {
 	return i
 }
 
-func GetAllRoutes() ([]route, error) {
-	var routes []route
+func GetAllRoutes() (map[string]string, error) {
+	routes := make(map[string]string)
+
 	ctx := context.Background()
 	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
 
@@ -107,7 +95,7 @@ func GetAllRoutes() ([]route, error) {
 		rPath := doc.Data()["route_path"]
 
 		if rID != nil && rPath != nil {
-			routes = append(routes, route{rID.(string), rPath.(string)})
+			routes[rID.(string)] = rPath.(string)
 		}
 	}
 
@@ -173,11 +161,11 @@ func UpdateDbAlerts(ltdAlerts alerts) error {
 	currentDbAlerts := GetCurrentServiceAlertTextsFromDb()
 	dbDocOutdated := true
 
-	for dbKey, cda := range currentDbAlerts {
+	for dbKey, dbAlertText := range currentDbAlerts {
 		dbDocOutdated = true
 
 		for i, la := range ltdAlerts {
-			if la.text == cda {
+			if la.text == dbAlertText {
 				// If there is a matching entry in the ltdAlerts, mark it for deletion.
 				// It's not needed because it's already in the database, and the
 				// database entry is still up-to-date.
@@ -265,4 +253,92 @@ func GetCurrentServiceAlertTextsFromDb() map[string]string {
 	}
 
 	return alerts
+}
+
+// Retrieve service alerts and associated route info to be able to include data
+// in the alert emails.
+func GetAlertsAndRoutesFromDb(routes map[string]string, baseUrl string) map[string][2]string {
+	allAlertsAndRoutes := make(map[string][2]string)
+
+	// What will be returned is a map whose keys are the alert keys and whose values
+	// are the the alert text and formatted route info (includes URLs to the LTD side).
+	var alertTextRoute [2]string
+	type AlertInfo struct {
+		Alert_text string   `firestore:"alert_text"`
+		Route_ids  []string `firestore:"route_ids"`
+	}
+	var alertInfo AlertInfo
+
+	ctx := context.Background()
+	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
+
+	if err != nil {
+		fmt.Printf("firestore.NewClient: %v", err)
+	}
+
+	defer client.Close()
+
+	iter := client.Collection("alerts").Where("outdated_at", "==", nil).Documents(ctx)
+
+	for {
+		doc, err := iter.Next()
+
+		if err == iterator.Done {
+			break
+		}
+
+		err = doc.DataTo(&alertInfo)
+
+		routeStr, err := FormatRoutes(alertInfo.Route_ids, baseUrl)
+
+		if err != nil {
+			fmt.Printf("Route info could not be formatted: %v", err)
+		}
+
+		alertTextRoute = [2]string{alertInfo.Alert_text, routeStr}
+
+		allAlertsAndRoutes[doc.Ref.ID] = alertTextRoute
+	}
+
+	return allAlertsAndRoutes
+}
+
+func FormatRoutes(routes []string, baseUrl string) (string, error) {
+	var routesText string
+	type RouteInfo struct {
+		Name       string `firestore:"name"`
+		Route_id   string `firestore:"route_id"`
+		Route_path string `firestore:"route_path"`
+	}
+	var routeInfo RouteInfo
+	ctx := context.Background()
+	client, err := firestore.NewClient(ctx, "ltd-sched-mon")
+
+	if err != nil {
+		return "", err
+	}
+
+	for _, route := range routes {
+		iter := client.Collection("routes").Where("route_id", "==", route).Documents(ctx)
+		for {
+			doc, err := iter.Next()
+
+			if err == iterator.Done {
+				break
+			}
+
+			err = doc.DataTo(&routeInfo)
+
+			if err != nil {
+				return routesText, err
+			}
+
+			routesText += fmt.Sprintf("%v (<a href='%v/%v'>Route %v</a>), ", routeInfo.Name, baseUrl, routeInfo.Route_path, routeInfo.Route_id)
+		}
+
+		// Remove last comma and space.
+		routesText = routesText[:len(routesText)-2]
+	}
+
+	return routesText, nil
 }
