@@ -9,7 +9,10 @@ import (
 
 func main() {
 	baseUrl := "https://www.ltd.org/system-map/"
-	allAlerts, err := gatherData.ScrapeSite(baseUrl)
+	routes, err := gatherData.GetAllRoutes()
+	fmt.Println("Route list retrieved from db")
+
+	allAlerts, err := gatherData.ScrapeSite(baseUrl, routes)
 
 	if err != nil {
 		fmt.Println(err)
@@ -25,8 +28,10 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	currDbAlerts := gatherData.GetCurrentServiceAlertTextsFromDb()
+	// Retrieve service alert text and associated formatted route text from database, so
+	// the info can be part of email alerts. Map keys are alert keys, and map values
+	// are the service alert text and route info string (includes links to LTD site).
+	alertsWithRoutes := gatherData.GetAlertsAndRoutesFromDb(routes, baseUrl)
 
 	for _, uk := range userKeys {
 		userData.UpdateUserAlerts(uk)
@@ -45,19 +50,19 @@ func main() {
 			fmt.Println(err)
 		}
 
-		fmt.Println("Retrieved userData")
+		fmt.Println("Retrieved userData.")
 
 		if len(alertKeys) > 0 {
-			err = emailAlerts.SendEmail(userInfo.Email, alertKeys, currDbAlerts)
+			err = emailAlerts.SendEmail(userInfo.Email, alertKeys, alertsWithRoutes)
 		} else {
-			fmt.Println("No alerts to send")
+			fmt.Println("No alerts to send.")
 		}
 
 		if err != nil {
 			fmt.Println(err)
 		}
 
-		// Save keys in user data as they are no longer new
+		// Save keys in user data as they are no longer new.
 		err = userData.SaveKeysInUserData(uk, alertKeys)
 
 		if err != nil {
