@@ -335,10 +335,10 @@ func FormatRoutes(routes []string, baseUrl string) (string, error) {
 
 			routesText += fmt.Sprintf("%v (<a href='%v/%v'>Route %v</a>), ", routeInfo.Name, baseUrl, routeInfo.Route_path, routeInfo.Route_id)
 		}
-
-		// Remove last comma and space.
-		routesText = routesText[:len(routesText)-2]
 	}
+
+	// Remove last comma and space.
+	routesText = routesText[:len(routesText)-2]
 
 	return routesText, nil
 }
